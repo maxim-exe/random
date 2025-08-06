@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scratch Bonus</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(180deg,rgba(22, 22, 43, 1) 0%, rgba(29, 29, 62, 1) 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 150px;
+  	  padding-right: 20px;
+      padding-bottom: 20px;
+      padding-left: 20px;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .scratch-card {
+      position: relative;
+      width: 90vw;
+      max-width: 400px;
+      aspect-ratio: 3 / 2;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      background: #fff;
+      margin-bottom: 30px;
+      font-size: 8vw;
+    }
+
+    .scratch-card.golden {
+      background: linear-gradient(135deg, #FFD700, #FFB700);
+    }
+
+    .prize {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(ellipse farthest-corner at right bottom, #FEDB37 0%, #FDB931 8%, #9f7928 30%, #8A6E2F 40%, transparent 80%),
+                radial-gradient(ellipse farthest-corner at left top, #FFFFFF 0%, #FFFFAC 8%, #D1B464 25%, #5d4a1f 62.5%, #5d4a1f 100%);;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #333;
+      z-index: 0;
+      transition: color 0.5s ease, transform 0.5s ease;
+    }
+
+    .prize.revealed {
+      color: #D3D6D8;
+      animation: pop 0.6s ease-out;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.5); }
+      100% { transform: scale(1); }
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+
+    .silver-overlay {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(120deg, #c0c0c0 25%, #a9a9a9 50%, #c0c0c0 75%);
+      background-size: 200% 200%;
+      animation: shine 3s linear infinite;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .silver-overlay.hidden {
+      display: none;
+    }
+
+    @keyframes shine {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+
+    .info-text {
+      text-align: center;
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      max-width: 400px;
+    }
+
+    button {
+      background: #1A1A26;
+      border: solid 1px #76767C;
+      color: white;
+      padding: 14px 32px;
+      font-weight: 400;
+      font-size: 1rem;
+      border-radius: 30px;
+      margin: 10px 0;
+      cursor: pointer;
+      max-width: 400px;
+      width: 60vw;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: rgba(255 255 255 / 0.2);
+    }
+
+    .max-winnings {
+      color: #7a7a8c;
+      font-size: 0.9rem;
+      margin-top: 15px;
+      max-width: 400px;
+      width: 90vw;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="scratch-card" id="scratchCard">
+    <div class="prize" id="prizeText">$100</div>
+    <canvas id="scratchCanvas"></canvas>
+    <div class="silver-overlay" id="silverOverlay"></div>
+  </div>
+
+  <div class="info-text">
+    You received a bonus for Crazy Time,<br>scratch to reveal
+  </div>
+
+  <button type="button" onclick="alert('Play Now clicked')">PLAY NOW</button>
+  <button type="button" onclick="alert('Go To Lobby clicked')">GO TO LOBBY</button>
+
+  <div class="max-winnings">Max winnings: €100</div>
+
+  <script>
+    const canvas = document.getElementById('scratchCanvas');
+    const ctx = canvas.getContext('2d');
+    const scratchCard = document.getElementById('scratchCard');
+    const prizeText = document.getElementById('prizeText');
+    const silverOverlay = document.getElementById('silverOverlay');
+
+    function resizeCanvas() {
+      canvas.width = scratchCard.offsetWidth;
+      canvas.height = scratchCard.offsetHeight;
+
+      const silverGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      silverGradient.addColorStop(0, '#c0c0c0');
+      silverGradient.addColorStop(0.5, '#a9a9a9');
+      silverGradient.addColorStop(1, '#c0c0c0');
+      ctx.fillStyle = silverGradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.globalCompositeOperation = 'destination-out';
+    }
+
+    resizeCanvas();
+
+    let isDrawing = false;
+    let hasScratched = false;
+    let revealed = false;
+
+    function getCursorPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX ? e.clientX : e.touches[0].clientX;
+      const y = e.clientY ? e.clientY : e.touches[0].clientY;
+      return { x: x - rect.left, y: y - rect.top };
+    }
+
+    function draw(e) {
+      if (!isDrawing || revealed) return;
+      e.preventDefault();
+
+      if (!hasScratched) {
+        silverOverlay.classList.add('hidden');
+        hasScratched = true;
+      }
+
+      const { x, y } = getCursorPos(e);
+      const scratchRadius = 60;
+      const scratchGradient = ctx.createRadialGradient(x, y, 0, x, y, scratchRadius);
+      scratchGradient.addColorStop(0, 'rgba(0,0,0,1)');
+      scratchGradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = scratchGradient;
+      ctx.beginPath();
+      ctx.arc(x, y, scratchRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      checkRevealPercentage();
+    }
+
+    function checkRevealPercentage() {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let revealedPixels = 0;
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        if (imageData.data[i + 3] === 0) revealedPixels++;
+      }
+      const percent = (revealedPixels / (canvas.width * canvas.height)) * 100;
+      if (percent > 10 && !revealed) {
+        revealPrize();
+      }
+    }
+
+    function revealPrize() {
+      revealed = true;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      prizeText.classList.add('revealed');
+      scratchCard.classList.add('golden');
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      isDrawing = true;
+      draw(e);
+    });
+
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', () => (isDrawing = false));
+    canvas.addEventListener('mouseleave', () => (isDrawing = false));
+
+    canvas.addEventListener('touchstart', (e) => {
+      isDrawing = true;
+      draw(e);
+    });
+
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', () => (isDrawing = false));
+
+    window.addEventListener('resize', resizeCanvas);
+  </script>
+</body>
+</html>
