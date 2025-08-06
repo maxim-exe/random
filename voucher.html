@@ -187,7 +187,7 @@
       }
 
       const { x, y } = getCursorPos(e);
-      const scratchRadius = 60;
+      const scratchRadius = 40;
       const scratchGradient = ctx.createRadialGradient(x, y, 0, x, y, scratchRadius);
       scratchGradient.addColorStop(0, 'rgba(0,0,0,1)');
       scratchGradient.addColorStop(1, 'rgba(0,0,0,0)');
