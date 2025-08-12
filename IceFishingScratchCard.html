@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ice Fishing Reward Games</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Prevents page scrolling while scratching */
+        }
+        /* Custom animation for the winning prize */
+        @keyframes prize-animation {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+        }
+        .prize-win-animation {
+            animation: prize-animation 1.5s ease-in-out infinite;
+            color: #67e8f9 !important; /* blue-500, !important to ensure override */
+        }
+        /* Style for non-winning numbers */
+        .prize-lost {
+            color: #9ca3af; /* gray-400 */
+        }
+        /* Ensures the canvas and grid are perfectly layered */
+        .scratch-card-container {
+            position: relative;
+            width: 80%;
+            aspect-ratio: 8 / 5; /* Updated aspect ratio */
+            margin: auto;
+            border-radius: 1rem;
+            overflow: hidden; /* Ensures canvas corners are rounded */
+            cursor: grab;
+            -webkit-tap-highlight-color: transparent; /* Removes blue tap highlight on mobile */
+        }
+        .scratch-card-container:active {
+            cursor: grabbing;
+        }
+        #prize-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+           /* background-color: #f3f4f6; /* gray-100 */
+            background: radial-gradient(ellipse farthest-corner at right bottom, #FEDB37 0%, #FDB931 8%, #9f7928 30%, #8A6E2F 40%, transparent 80%),
+                radial-gradient(ellipse farthest-corner at left top, #FFFFFF 0%, #FFFFAC 8%, #D1B464 25%, #5d4a1f 62.5%, #5d4a1f 100%);;
+            border-radius: 1rem;
+        }
+        #scratch-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 1rem;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div id="header" class="text-center mb-6 transition-opacity duration-500">
+        <h1 id="main-title" class="text-3xl md:text-4xl font-bold text-cyan-300">Ice Fishing Reward Games</h1>
+        <p id="subtitle" class="text-lg md:text-xl text-slate-300 mt-1">Scratch to see how many</p>
+    </div>
+
+    <!-- Scratch Card Area -->
+    <div id="card-container" class="scratch-card-container shadow-2xl shadow-cyan-500/20 mt-16 md:mt-24">
+        <!-- The prizes that are revealed -->
+        <div id="prize-grid"></div>
+        <!-- The scratchable surface -->
+        <canvas id="scratch-canvas"></canvas>
+    </div>
+    
+    <!-- Action Buttons (initially hidden) -->
+    <div id="action-buttons" class="mt-8 flex flex-col gap-4 w-4/5 max-w-xs hidden">
+        <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105">Play game</button>
+        <button class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-lg shadow-lg transition-transform transform hover:scale-105">Go to Lobby</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const canvas = document.getElementById('scratch-canvas');
+            const ctx = canvas.getContext('2d');
+            const cardContainer = document.getElementById('card-container');
+            const prizeGrid = document.getElementById('prize-grid');
+            const mainTitle = document.getElementById('main-title');
+            const subtitle = document.getElementById('subtitle');
+            const actionButtons = document.getElementById('action-buttons');
+
+            // --- Game State Variables ---
+            let isDrawing = false;
+            let isGameFinished = false;
+            let winningValue = 0;
+            let winningIndices = [];
+            let cellScratchPercentages = new Array(9).fill(0);
+            
+            // --- Game Logic Functions ---
+
+            /**
+             * Generates the set of prizes for the card.
+             * Ensures exactly one set of 3 matching prizes and stores their indices.
+             * @returns {{prizes: number[], winningValue: number}}
+             */
+            function generatePrizes() {
+                const prizeValues = [5, 10, 25, 50, 100];
+                const winningPrize = prizeValues[Math.floor(Math.random() * prizeValues.length)];
+                winningValue = winningPrize;
+
+                let prizes = new Array(9).fill(null);
+                winningIndices = []; // Reset for new game
+
+                // Place the 3 winning prizes and record their indices
+                let placedWinners = 0;
+                while (placedWinners < 3) {
+                    const randomIndex = Math.floor(Math.random() * 9);
+                    if (prizes[randomIndex] === null) {
+                        prizes[randomIndex] = winningPrize;
+                        winningIndices.push(randomIndex);
+                        placedWinners++;
+                    }
+                }
+
+                // Create a pool for the remaining 6 prizes
+                const remainingPrizesPool = [];
+                const otherValues = prizeValues.filter(v => v !== winningPrize);
+                
+                otherValues.forEach(val => {
+                    remainingPrizesPool.push(val);
+                    remainingPrizesPool.push(val);
+                });
+
+                for (let i = remainingPrizesPool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [remainingPrizesPool[i], remainingPrizesPool[j]] = [remainingPrizesPool[j], remainingPrizesPool[i]];
+                }
+
+                let fillerIndex = 0;
+                for (let i = 0; i < 9; i++) {
+                    if (prizes[i] === null) {
+                        prizes[i] = remainingPrizesPool[fillerIndex++];
+                    }
+                }
+                
+                return { prizes, winningValue };
+            }
+
+            /**
+             * Populates the prize grid in the DOM.
+             */
+            function populatePrizeGrid(prizes) {
+                prizeGrid.innerHTML = '';
+                prizes.forEach((prize, index) => {
+                    const prizeCell = document.createElement('div');
+                    prizeCell.id = `prize-${index}`;
+                    prizeCell.className = 'flex items-center justify-center text-3xl font-bold text-slate-800 transition-all duration-500';
+                    prizeCell.textContent = `€${prize}`;
+                    prizeGrid.appendChild(prizeCell);
+                });
+            }
+            
+            /**
+             * Sets up the canvas dimensions and draws the initial scratchable layer.
+             */
+            function setupCanvas() {
+                const rect = cardContainer.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, '#bdc3c7');
+                gradient.addColorStop(0.5, '#2c3e50');
+                gradient.addColorStop(1, '#bdc3c7');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            /**
+             * Gets the coordinates of a mouse or touch event relative to the canvas.
+             */
+            function getEventCoordinates(event) {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+
+                if (event.touches && event.touches[0]) {
+                    return {
+                        x: (event.touches[0].clientX - rect.left) * scaleX,
+                        y: (event.touches[0].clientY - rect.top) * scaleY
+                    };
+                }
+                return {
+                    x: (event.clientX - rect.left) * scaleX,
+                    y: (event.clientY - rect.top) * scaleY
+                };
+            }
+
+            /**
+             * Handles the start of a scratch action.
+             */
+            function startScratching(event) {
+                if (isGameFinished) return;
+                isDrawing = true;
+                scratch(event);
+            }
+
+            /**
+             * Handles the end of a scratch action.
+             */
+            function stopScratching() {
+                if (!isDrawing) return;
+                isDrawing = false;
+                updateAndCheckWin();
+            }
+
+            /**
+             * The main scratching logic. Erases part of the canvas.
+             */
+            function scratch(event) {
+                if (!isDrawing || isGameFinished) return;
+                event.preventDefault();
+
+                const { x, y } = getEventCoordinates(event);
+                
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                // Increased radius for a larger scratch area
+                ctx.arc(x, y, 26, 0, Math.PI * 2, false);
+                ctx.fill();
+            }
+
+            /**
+             * Calculates scratch percentage per cell and checks for win conditions.
+             */
+            function updateAndCheckWin() {
+                if (isGameFinished) return;
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixelData = imageData.data;
+                const cellWidth = canvas.width / 3;
+                const cellHeight = canvas.height / 3;
+                let totalTransparentPixels = 0;
+
+                // 1. Calculate scratch percentage for each cell
+                for (let i = 0; i < 9; i++) {
+                    const cellRow = Math.floor(i / 3);
+                    const cellCol = i % 3;
+                    const startX = Math.floor(cellCol * cellWidth);
+                    const startY = Math.floor(cellRow * cellHeight);
+                    
+                    let transparentInCell = 0;
+                    const totalPixelsInCell = Math.floor(cellWidth) * Math.floor(cellHeight);
+
+                    for (let y = startY; y < startY + cellHeight; y++) {
+                        for (let x = startX; x < startX + cellWidth; x++) {
+                            const alphaIndex = (y * canvas.width + x) * 4 + 3;
+                            if (pixelData[alphaIndex] === 0) {
+                                transparentInCell++;
+                            }
+                        }
+                    }
+                    cellScratchPercentages[i] = (transparentInCell / totalPixelsInCell) * 100;
+                    totalTransparentPixels += transparentInCell;
+                }
+
+                // 2. Check for the new win condition (3 winning cells > 30% scratched)
+                const winningCellsRevealed = winningIndices.filter(index => cellScratchPercentages[index] >= 30).length;
+
+                if (winningCellsRevealed === 3) {
+                    finishGame();
+                    return; // Game is over
+                }
+
+                // 3. Fallback: Check for >70% total scratch
+                const totalPixels = canvas.width * canvas.height;
+                const totalScratchPercentage = (totalTransparentPixels / totalPixels) * 100;
+                if (totalScratchPercentage > 70) {
+                    finishGame();
+                }
+            }
+
+            /**
+             * Finalizes the game, shows animations, and updates the UI.
+             */
+            function finishGame() {
+                if (isGameFinished) return;
+                isGameFinished = true;
+
+                canvas.style.transition = 'opacity 0.5s ease-out';
+                canvas.style.opacity = '0';
+
+                const prizeCells = prizeGrid.querySelectorAll('div');
+                prizeCells.forEach(cell => {
+                    if (cell.textContent === `€${winningValue}`) {
+                        cell.classList.add('prize-win-animation');
+                    } else {
+                        cell.classList.add('prize-lost');
+                    }
+                });
+                
+                setTimeout(() => {
+                    mainTitle.textContent = 'Congratulations!';
+                    subtitle.textContent = `€${winningValue} reward games won`;
+                    actionButtons.classList.remove('hidden');
+                    actionButtons.style.opacity = '0';
+                    requestAnimationFrame(() => {
+                        actionButtons.style.transition = 'opacity 0.5s';
+                        actionButtons.style.opacity = '1';
+                    });
+                }, 500);
+            }
+
+            // --- Event Listeners ---
+            canvas.addEventListener('mousedown', startScratching);
+            canvas.addEventListener('touchstart', startScratching, { passive: false });
+            canvas.addEventListener('mouseup', stopScratching);
+            canvas.addEventListener('touchend', stopScratching);
+            canvas.addEventListener('mouseleave', stopScratching);
+            canvas.addEventListener('mousemove', scratch);
+            canvas.addEventListener('touchmove', scratch, { passive: false });
+
+            window.addEventListener('resize', () => {
+                if (!isGameFinished) {
+                    setupCanvas();
+                }
+            });
+
+            // --- Initial Game Setup ---
+            function initializeGame() {
+                const { prizes } = generatePrizes();
+                populatePrizeGrid(prizes);
+                setupCanvas();
+            }
+
+            initializeGame();
+        });
+    </script>
+
+</body>
+</html>
