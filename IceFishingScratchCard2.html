@@ -21,6 +21,8 @@
         .prize-win-animation {
             animation: prize-animation 1.5s ease-in-out infinite;
             color: #67e8f9 !important; /* blue-500, !important to ensure override */
+           
+
         }
         /* Style for non-winning numbers */
         .prize-lost {
@@ -214,7 +216,9 @@
                 prizes.forEach((prize, index) => {
                     const prizeCell = document.createElement('div');
                     prizeCell.id = `prize-${index}`;
-                    prizeCell.className = 'flex items-center justify-center text-3xl font-bold text-slate-800 transition-all duration-500';
+                    /*prizeCell.className = 'flex items-center justify-center text-3xl font-bold text-slate-800 transition-all duration-500';*/
+                    prizeCell.className = 'flex items-center justify-center text-3xl font-bold text-gray-400 transition-all duration-500';
+
                     prizeCell.textContent = `€${prize}`;
                     prizeGrid.appendChild(prizeCell);
                 });
